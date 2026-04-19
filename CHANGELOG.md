@@ -2,6 +2,17 @@
 
 All notable changes to the `mops` CLI project will be documented in this file.
 
+## [1.1.2] - 2026-04-20
+
+### Added
+- **Diagnostics**: Added `mops doctor` command to check environment health (DB, Worker, Dependencies).
+- **Completion**: Added `mops completion bash` to generate shell completion scripts.
+- **Version**: Added `mops version` command to display build version.
+
+### Changed
+- **Makefile**: Added `lint`, `format`, and `help` targets for better developer productivity.
+- **Makefile**: Improved `test` target to automatically detect and use `.venv` if present.
+
 ## [1.1.1] - 2026-04-19
 
 ### Fixed

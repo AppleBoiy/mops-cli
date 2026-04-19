@@ -1,9 +1,9 @@
 CC ?= gcc
-CFLAGS = -Wall -Wextra -std=c11 -O2 -g -D_XOPEN_SOURCE=700 -MMD -MP
+CFLAGS = -Wall -Wextra -std=c11 -O2 -g -D_XOPEN_SOURCE=700 -MMD -MP -DVERSION=\"$(VERSION)\"
 LDFLAGS ?= 
 LDLIBS = -lsqlite3 -ldl -lncurses
 
-VERSION ?= 1.1.1
+VERSION ?= 1.1.2
 
 TARGET = mops
 SRC_DIR = src
@@ -25,7 +25,7 @@ else
 DO =
 endif
 
-.PHONY: all clean install uninstall install-dry-run uninstall-dry-run directories dev deb
+.PHONY: all clean install uninstall install-dry-run uninstall-dry-run directories dev deb test lint format help
 
 all: directories $(TARGET)
 
@@ -81,3 +81,31 @@ deb: all
 	$(MAKE) install DESTDIR=deb-build PREFIX=/usr
 	dpkg-deb --build deb-build mops_$(VERSION)_$$(dpkg --print-architecture 2>/dev/null || echo amd64).deb
 	rm -rf deb-build
+
+test: all
+	@if [ -d ".venv" ]; then \
+		echo "Using virtual environment..."; \
+		. .venv/bin/activate && pytest -v tests; \
+	else \
+		pytest -v tests; \
+	fi
+
+lint:
+	cppcheck --enable=all --suppress=missingIncludeSystem $(SRC_DIR)/*.c
+
+format:
+	clang-format -i $(SRC_DIR)/*.c
+
+help:
+	@echo "Mops CLI Build System"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  all        - Build the binary (default)"
+	@echo "  dev        - Build with DEV_MODE enabled"
+	@echo "  test       - Run functional tests using pytest"
+	@echo "  lint       - Run static analysis using cppcheck"
+	@echo "  format     - Auto-format C source code using clang-format"
+	@echo "  deb        - Build Debian package"
+	@echo "  install    - Install binary and man pages to $(PREFIX)"
+	@echo "  uninstall  - Remove binary and man pages from $(PREFIX)"
+	@echo "  clean      - Remove build artifacts and binaries"

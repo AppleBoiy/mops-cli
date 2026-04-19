@@ -12,6 +12,8 @@ extern int cmd_net(int argc, char **argv);
 extern int cmd_gcp(int argc, char **argv);
 extern int cmd_task(int argc, char **argv);
 extern int cmd_worker(int argc, char **argv);
+extern int cmd_doctor(int argc, char **argv);
+extern int cmd_completion(int argc, char **argv);
 extern int db_init(void);
 
 void print_usage(const char *prog_name) {
@@ -24,7 +26,10 @@ void print_usage(const char *prog_name) {
     printf("  net       Network operations (port)\n");
     printf("  gcp       Google Cloud Platform operations (whoami, spot-watch, tunnel, run-with-secrets)\n");
     printf("  task      Task management (submit, list, kill, logs, clean)\n");
-    printf("  worker    Manage the background task scheduler daemon (start, stop, status)\n\n");
+    printf("  worker    Manage the background task scheduler daemon (start, stop, status)\n");
+    printf("  doctor    Run diagnostic checks on the environment\n");
+    printf("  completion Generate shell completion scripts\n");
+    printf("  version   Show version information\n\n");
     printf("Aliases:\n");
     printf("  mem       Alias for 'mops sys mem'\n");
     printf("  qsub      Alias for 'mops task submit'\n");
@@ -75,6 +80,13 @@ int main(int argc, char **argv) {
         return cmd_task(argc - 1, argv + 1);
     } else if (strcmp(cmd, "worker") == 0) {
         return cmd_worker(argc - 1, argv + 1);
+    } else if (strcmp(cmd, "doctor") == 0) {
+        return cmd_doctor(argc - 1, argv + 1);
+    } else if (strcmp(cmd, "completion") == 0) {
+        return cmd_completion(argc - 1, argv + 1);
+    } else if (strcmp(cmd, "version") == 0) {
+        printf("mops version %s\n", VERSION);
+        return EXIT_SUCCESS;
     } else if (strcmp(cmd, "mem") == 0) {
         int new_argc = argc;
         char **new_argv = malloc(sizeof(char*) * new_argc);

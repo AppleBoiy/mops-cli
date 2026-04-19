@@ -59,6 +59,8 @@ int cmd_task_clean(int argc, char **argv);
 int cmd_worker_start(int argc, char **argv);
 int cmd_worker_stop(int argc, char **argv);
 int cmd_worker_status(int argc, char **argv);
+int cmd_doctor(int argc, char **argv);
+int cmd_completion(int argc, char **argv);
 
 
 #endif /* MOPS_H */
