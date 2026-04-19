@@ -13,7 +13,15 @@ PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
 MANDIR = $(PREFIX)/share/man/man1
 
-.PHONY: all clean install uninstall directories dev deb
+# Dry-run support: when DRY_RUN=1, print commands instead of executing them
+DRY_RUN ?= 0
+ifeq ($(DRY_RUN),1)
+DO = @echo
+else
+DO =
+endif
+
+.PHONY: all clean install uninstall install-dry-run uninstall-dry-run directories dev deb
 
 all: directories $(TARGET)
 
@@ -33,14 +41,22 @@ clean:
 	rm -rf $(OBJ_DIR) $(TARGET) deb-build *.deb
 
 install: all
-	install -d $(DESTDIR)$(BINDIR)
-	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)
-	install -d $(DESTDIR)$(MANDIR)
-	install -m 644 man/mops.1 $(DESTDIR)$(MANDIR)
+	$(DO)install -d $(DESTDIR)$(BINDIR)
+	$(DO)install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)
+	$(DO)install -d $(DESTDIR)$(MANDIR)
+	$(DO)install -m 644 man/mops.1 $(DESTDIR)$(MANDIR)
+
+# Helper target: dry-run install
+install-dry-run: DRY_RUN=1
+install-dry-run: install
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/$(TARGET)
-	rm -f $(DESTDIR)$(MANDIR)/mops.1
+	$(DO)rm -f $(DESTDIR)$(BINDIR)/$(TARGET)
+	$(DO)rm -f $(DESTDIR)$(MANDIR)/mops.1
+
+# Helper target: dry-run uninstall
+uninstall-dry-run: DRY_RUN=1
+uninstall-dry-run: uninstall
 
 
 deb: all
