@@ -102,7 +102,7 @@ static void run_worker_loop(void) {
                 pid_t cpid = fork();
                 if (cpid < 0) {
                     /* Fork failed: mark task as FAILED */
-                    sqlite3_prepare_v2(db, "UPDATE tasks SET status = 'FAILED' WHERE id = ?", -1, &update_stmt, NULL);
+                    sqlite3_prepare_v2(db, "UPDATE tasks SET status = 'FAILED', exit_code = 1 WHERE id = ?", -1, &update_stmt, NULL);
                     sqlite3_bind_int(update_stmt, 1, task_id);
                     sqlite3_step(update_stmt);
                     sqlite3_finalize(update_stmt);
@@ -150,9 +150,10 @@ static void run_worker_loop(void) {
                     int exit_code = (WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1);
                     const char *final_status = (exit_code == 0) ? "FINISHED" : "FAILED";
 
-                    sqlite3_prepare_v2(db, "UPDATE tasks SET status = ? WHERE id = ?", -1, &update_stmt, NULL);
+                    sqlite3_prepare_v2(db, "UPDATE tasks SET status = ?, exit_code = ? WHERE id = ?", -1, &update_stmt, NULL);
                     sqlite3_bind_text(update_stmt, 1, final_status, -1, SQLITE_STATIC);
-                    sqlite3_bind_int(update_stmt, 2, task_id);
+                    sqlite3_bind_int(update_stmt, 2, exit_code);
+                    sqlite3_bind_int(update_stmt, 3, task_id);
                     sqlite3_step(update_stmt);
                     sqlite3_finalize(update_stmt);
 

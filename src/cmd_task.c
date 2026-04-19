@@ -158,6 +158,18 @@ int cmd_task_exec(int argc, char **argv) {
     }
 
     update_task_status(task_id, exit_code == 0 ? "FINISHED" : "FAILED");
+    {
+        sqlite3 *db = db_get_connection();
+        if (db) {
+            sqlite3_stmt *stmt;
+            if (sqlite3_prepare_v2(db, "UPDATE tasks SET exit_code = ? WHERE id = ?", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int(stmt, 1, exit_code);
+                sqlite3_bind_int(stmt, 2, task_id);
+                sqlite3_step(stmt);
+                sqlite3_finalize(stmt);
+            }
+        }
+    }
 
     if (notify_url) {
         notify_webhook(notify_url, task_id, exit_code);
@@ -240,6 +252,18 @@ int cmd_task_bg(int argc, char **argv) {
         }
         /* 4. Update status dynamically from the background process */
         update_task_status(task_id, exit_code == 0 ? "FINISHED" : "FAILED");
+        {
+            sqlite3 *db = db_get_connection();
+            if (db) {
+                sqlite3_stmt *stmt;
+                if (sqlite3_prepare_v2(db, "UPDATE tasks SET exit_code = ? WHERE id = ?", -1, &stmt, NULL) == SQLITE_OK) {
+                    sqlite3_bind_int(stmt, 1, exit_code);
+                    sqlite3_bind_int(stmt, 2, task_id);
+                    sqlite3_step(stmt);
+                    sqlite3_finalize(stmt);
+                }
+            }
+        }
 
         /* 5. Trigger webhook if requested */
         if (notify_url) {
@@ -367,7 +391,7 @@ int cmd_task_kill(int argc, char **argv) {
         const unsigned char *status = sqlite3_column_text(stmt, 1);
 
         if (strcmp((const char *)status, "RUNNING") == 0) {
-            if (kill(pid, SIGTERM) == 0) {
+            if (kill(-pid, SIGTERM) == 0) {
                 printf("Sent SIGTERM to task %d (PID %d)\n", task_id, pid);
                 update_task_status(task_id, "KILLED");
             } else {
