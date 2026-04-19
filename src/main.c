@@ -33,7 +33,7 @@ void print_author(void) {
     printf("----------------\n");
     printf("Name:   Chaipat J.\n");
     printf("GitHub: AppleBoiy\n");
-    printf("Email:  contact.chaipat@gmail.com\n");
+    printf("Email:  contact@chaipat.cc\n");
 }
 
 int main(int argc, char **argv) {

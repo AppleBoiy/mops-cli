@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+
+# This is a minimalist debian/rules file for a project using a standard Makefile.
+# It uses debhelper to automate the build process.
+# See debhelper(7) for more information.
+
+# Export all environment variables.
+export
+
+# Uncomment this to get a verbose build.
+# export DH_VERBOSE=1
+
+# The "%" target is a wildcard that matches any target passed by dpkg-buildpackage
+# (e.g., build, clean, binary, etc.) and forwards it to debhelper (dh).
+# Debhelper then runs the appropriate sequence of commands.
+%:
+	dh $@
+
+# If you need to override a specific step, you can do so here.
+# For example, to add a custom command after the install step:
+#
+# override_dh_install:
+#	dh_install
+#	# Your custom command here
+#

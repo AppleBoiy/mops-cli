@@ -1,0 +1,16 @@
+Source: mops
+Maintainer: Chaipat J. <contact@chaipat.cc>
+Section: utils
+Priority: optional
+Build-Depends: debhelper-compat (= 13), build-essential, libsqlite3-dev
+Standards-Version: 4.6.2
+
+Package: mops
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libsqlite3-0
+Description: Multipurpose Operations CLI for DevOps and MLOps
+ mops is a lightweight, dependency-free, high-performance C utility for MLOps
+ engineers and DevOps professionals running on Linux. It provides instant,
+ zero-latency feedback on system resources, container environments, and
+ background task lifecycles, bridging the gap between low-level system
+ metrics and high-level operational context.
