@@ -137,12 +137,21 @@ int cmd_worker_start(int argc, char **argv) {
     FILE *fp = fopen(PID_FILE, "r");
     if (fp) {
         pid_t pid;
-        if (fscanf(fp, "%d", &pid) == 1 && kill(pid, 0) == 0) {
-            fprintf(stderr, "Error: mops worker is already running (PID: %d).\n", pid);
+        if (fscanf(fp, "%d", &pid) == 1) {
+            if (kill(pid, 0) == 0) {
+                fprintf(stderr, "Error: mops worker is already running (PID: %d).\n", pid);
+                fclose(fp);
+                return 1;
+            } else {
+                /* Stale PID file; remove it before starting */
+                fclose(fp);
+                remove(PID_FILE);
+            }
+        } else {
             fclose(fp);
-            return 1;
+            /* Corrupt PID file; remove it */
+            remove(PID_FILE);
         }
-        fclose(fp);
     }
     
     printf("Starting mops worker daemon...\n");
@@ -152,11 +161,30 @@ int cmd_worker_start(int argc, char **argv) {
     }
 
     fp = fopen(PID_FILE, "w");
-    if (!fp) return 1;
+    if (!fp) {
+        /* Could not write PID file; abort */
+        return 1;
+    }
     fprintf(fp, "%d\n", getpid());
+    fflush(fp);
+    int fd = fileno(fp);
+    if (fd >= 0) {
+        fsync(fd);
+    }
     fclose(fp);
     
-    if (db_init() != 0) return 1;
+    /* Initialize database with retries to avoid transient failures */
+    int init_rc = -1;
+    for (int attempt = 0; attempt < 5; attempt++) {
+        init_rc = db_init();
+        if (init_rc == 0) break;
+        sleep(1);
+    }
+    if (init_rc != 0) {
+        /* Clean up PID file on failure to avoid stale state */
+        remove(PID_FILE);
+        return 1;
+    }
 
     run_worker_loop();
     return 0;
@@ -181,10 +209,42 @@ int cmd_worker_stop(int argc, char **argv) {
 
     if (kill(pid, SIGTERM) == 0) {
         printf("Sent SIGTERM to mops worker (PID %d).\n", pid);
-        sleep(1);
-        if (kill(pid, 0) != 0) {
+        /* Wait up to 10 seconds for graceful shutdown */
+        int exited = 0;
+        for (int i = 0; i < 100; i++) {
+            if (kill(pid, 0) != 0) {
+                exited = 1;
+                break;
+            }
+            usleep(100000); /* 100ms */
+        }
+        if (exited) {
             printf("Worker has shut down.\n");
             remove(PID_FILE);
+        } else {
+            fprintf(stderr, "Worker did not exit after SIGTERM; sending SIGKILL.\n");
+            if (kill(pid, SIGKILL) == 0) {
+                /* Wait briefly for SIGKILL to take effect */
+                for (int i = 0; i < 50; i++) {
+                    if (kill(pid, 0) != 0) break;
+                    usleep(100000);
+                }
+                if (kill(pid, 0) != 0) {
+                    printf("Worker was forcefully terminated.\n");
+                    remove(PID_FILE);
+                } else {
+                    fprintf(stderr, "Failed to terminate worker PID %d.\n", pid);
+                    return 1;
+                }
+            } else {
+                if (errno == ESRCH) {
+                    /* Already gone */
+                    remove(PID_FILE);
+                } else {
+                    perror("Failed to send SIGKILL to worker");
+                    return 1;
+                }
+            }
         }
     } else {
         if (errno == ESRCH) {
@@ -219,6 +279,7 @@ int cmd_worker_status(int argc, char **argv) {
         printf("mops worker: running (PID %d)\n", pid);
     } else {
         printf("mops worker: stopped (stale PID file found)\n");
+        remove(PID_FILE);
         return 1;
     }
     return 0;

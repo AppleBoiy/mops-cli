@@ -3,12 +3,16 @@
 #include <sqlite3.h>
 #include "mops.h"
 
-#define DB_PATH "mops.db"
+#define DEFAULT_DB_PATH "mops.db"
 
 static sqlite3 *db = NULL;
 
 int db_init(void) {
-    int rc = sqlite3_open(DB_PATH, &db);
+    const char *db_path = getenv("MOPS_DB_PATH");
+    if (!db_path || db_path[0] == '\0') {
+        db_path = DEFAULT_DB_PATH;
+    }
+    int rc = sqlite3_open(db_path, &db);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Failed to open database: %s\n", sqlite3_errmsg(db));
         return -1;
