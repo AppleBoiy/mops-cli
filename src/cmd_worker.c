@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <time.h>
 #include "mops.h"
 
 #define PID_FILE "/tmp/mops_worker.pid"
@@ -216,7 +217,8 @@ int cmd_worker_stop(int argc, char **argv) {
                 exited = 1;
                 break;
             }
-            usleep(100000); /* 100ms */
+            struct timespec ts = {0, 100000000};
+            nanosleep(&ts, NULL); /* 100ms */
         }
         if (exited) {
             printf("Worker has shut down.\n");
@@ -227,7 +229,8 @@ int cmd_worker_stop(int argc, char **argv) {
                 /* Wait briefly for SIGKILL to take effect */
                 for (int i = 0; i < 50; i++) {
                     if (kill(pid, 0) != 0) break;
-                    usleep(100000);
+                    struct timespec ts = {0, 100000000};
+                    nanosleep(&ts, NULL);
                 }
                 if (kill(pid, 0) != 0) {
                     printf("Worker was forcefully terminated.\n");
