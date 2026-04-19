@@ -12,9 +12,12 @@ OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
 
-.PHONY: all clean install directories
+.PHONY: all clean install directories dev
 
 all: directories $(TARGET)
+
+dev: CFLAGS += -DDEV_MODE
+dev: all
 
 directories:
 	@mkdir -p $(OBJ_DIR)

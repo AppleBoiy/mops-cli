@@ -117,10 +117,48 @@ int cmd_task_bg(int argc, char **argv) {
     }
 }
 
+#ifdef DEV_MODE
 int cmd_task_queue(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: mops task queue \"<command>\"\n");
+        fprintf(stderr, "Usage: mops task queue \"<command>\" | --exec\n");
         return 1;
+    }
+    
+    if (strcmp(argv[1], "--exec") == 0) {
+        sqlite3 *db = db_get_connection();
+        if (!db) return 1;
+        
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT id, command FROM tasks WHERE status = 'QUEUED' ORDER BY id ASC";
+        
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+            fprintf(stderr, "Failed to query queued tasks.\n");
+            return 1;
+        }
+        
+        int found = 0;
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            found = 1;
+            int id = sqlite3_column_int(stmt, 0);
+            const char *cmd_text = (const char *)sqlite3_column_text(stmt, 1);
+            
+            printf("Executing queued task %d: %s\n", id, cmd_text);
+            update_task_status(id, "RUNNING");
+            
+            int ret = system(cmd_text);
+            if (ret == 0) {
+                update_task_status(id, "FINISHED");
+            } else {
+                update_task_status(id, "FAILED");
+            }
+        }
+        
+        sqlite3_finalize(stmt);
+        
+        if (!found) {
+            printf("No queued tasks to execute.\n");
+        }
+        return 0;
     }
     
     const char *cmd = argv[1];
@@ -128,6 +166,7 @@ int cmd_task_queue(int argc, char **argv) {
     printf("Task added to queue: %s\n", cmd);
     return 0;
 }
+#endif
 
 int cmd_task_list(int argc, char **argv) {
     (void)argc;
@@ -226,7 +265,11 @@ int cmd_task_kill(int argc, char **argv) {
 
 int cmd_task(int argc, char **argv) {
     if (argc < 2) {
+#ifdef DEV_MODE
         fprintf(stderr, "Usage: mops task <exec|bg|queue|list|kill> [args...]\n");
+#else
+        fprintf(stderr, "Usage: mops task <exec|bg|list|kill> [args...]\n");
+#endif
         return 1;
     }
 
@@ -236,15 +279,21 @@ int cmd_task(int argc, char **argv) {
         return cmd_task_exec(argc - 1, argv + 1);
     } else if (strcmp(subcmd, "bg") == 0) {
         return cmd_task_bg(argc - 1, argv + 1);
+#ifdef DEV_MODE
     } else if (strcmp(subcmd, "queue") == 0) {
         return cmd_task_queue(argc - 1, argv + 1);
+#endif
     } else if (strcmp(subcmd, "list") == 0) {
         return cmd_task_list(argc - 1, argv + 1);
     } else if (strcmp(subcmd, "kill") == 0) {
         return cmd_task_kill(argc - 1, argv + 1);
     } else {
         fprintf(stderr, "Unknown task subcommand: %s\n", subcmd);
+#ifdef DEV_MODE
         fprintf(stderr, "Usage: mops task <exec|bg|queue|list|kill> [args...]\n");
+#else
+        fprintf(stderr, "Usage: mops task <exec|bg|list|kill> [args...]\n");
+#endif
         return 1;
     }
 }
