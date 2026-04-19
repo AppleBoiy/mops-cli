@@ -2,7 +2,7 @@
 
 All notable changes to the `mops` CLI project will be documented in this file.
 
-## [Unreleased]
+## [1.1.0] - 2026-04-19
 
 ### Added
 - **Dashboard**: Added the `mops dashboard` command for a real-time terminal UI monitoring system resources and the background task queue, powered by `ncurses`.
