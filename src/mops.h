@@ -1,8 +1,11 @@
 #ifndef MOPS_H
 #define MOPS_H
 
+#include <sqlite3.h>
+
 /* --- Database Operations --- */
 int db_init(void);
+sqlite3 *db_get_connection(void);
 
 /* --- Subcommand Dispatchers --- */
 int cmd_disk(int argc, char **argv);
