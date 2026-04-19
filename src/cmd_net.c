@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,7 +57,7 @@ static void find_process_by_inode(unsigned long target_inode) {
         /* Check if directory name is numeric (indicates a PID) */
         if (!isdigit(proc_ent->d_name[0])) continue;
 
-        char fd_path[256];
+        char fd_path[512];
         snprintf(fd_path, sizeof(fd_path), "/proc/%s/fd", proc_ent->d_name);
 
         DIR *fd_dir = opendir(fd_path);
@@ -79,7 +80,7 @@ static void find_process_by_inode(unsigned long target_inode) {
                 if (sscanf(link_dest, "socket:[%lu]", &ino) == 1) {
                     if (ino == target_inode) {
                         /* Found the process! Read its command line */
-                        char cmd_path[256];
+                        char cmd_path[512];
                         snprintf(cmd_path, sizeof(cmd_path), "/proc/%s/cmdline", proc_ent->d_name);
                         FILE *cmd_fp = fopen(cmd_path, "r");
                         char cmdline[1024] = {0};
