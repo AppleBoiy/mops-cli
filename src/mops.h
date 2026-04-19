@@ -15,6 +15,7 @@ sqlite3 *db_get_connection(void);
  */
 int cmd_disk(int argc, char **argv);
 int cmd_sys(int argc, char **argv);
+int cmd_dashboard(int argc, char **argv);
 int cmd_net(int argc, char **argv);
 int cmd_gcp(int argc, char **argv);
 int cmd_task(int argc, char **argv);

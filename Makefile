@@ -1,7 +1,7 @@
 CC ?= gcc
 CFLAGS = -Wall -Wextra -std=c11 -O2 -g -D_XOPEN_SOURCE=700 -MMD -MP
 LDFLAGS ?= 
-LDLIBS = -lsqlite3 -ldl
+LDLIBS = -lsqlite3 -ldl -lncurses
 
 VERSION ?= 1.0.0
 

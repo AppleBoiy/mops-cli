@@ -7,6 +7,7 @@
  */
 extern int cmd_disk(int argc, char **argv);
 extern int cmd_sys(int argc, char **argv);
+extern int cmd_dashboard(int argc, char **argv);
 extern int cmd_net(int argc, char **argv);
 extern int cmd_gcp(int argc, char **argv);
 extern int cmd_task(int argc, char **argv);
@@ -19,6 +20,7 @@ void print_usage(const char *prog_name) {
     printf("Commands:\n");
     printf("  disk      Disk operations (status, usage, mounts)\n");
     printf("  sys       System & Hardware metrics (cpu, gpu, tpu, oom, cgroup)\n");
+    printf("  dashboard Real-time system monitoring dashboard\n");
     printf("  net       Network operations (port)\n");
     printf("  gcp       Google Cloud Platform operations (whoami, spot-watch, tunnel, run-with-secrets)\n");
     printf("  task      Task management (submit, list, kill, logs, clean)\n");
@@ -63,6 +65,8 @@ int main(int argc, char **argv) {
         return cmd_disk(argc - 1, argv + 1);
     } else if (strcmp(cmd, "sys") == 0) {
         return cmd_sys(argc - 1, argv + 1);
+    } else if (strcmp(cmd, "dashboard") == 0) {
+        return cmd_dashboard(argc - 1, argv + 1);
     } else if (strcmp(cmd, "net") == 0) {
         return cmd_net(argc - 1, argv + 1);
     } else if (strcmp(cmd, "gcp") == 0) {

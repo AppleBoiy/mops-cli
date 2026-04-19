@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include "mops.h"
+#include "argtable3.h"
 
 /*
  * System Metrics - CPU
@@ -44,19 +45,39 @@ static unsigned long long get_total_time(struct cpu_stat *st) {
 }
 
 int cmd_sys_cpu(int argc, char **argv) {
-    int human_readable = 0;
-    int long_format = 0;
-    int json = 0;
-    for (int i = 0; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0) human_readable = 1;
-        if (strcmp(argv[i], "-l") == 0) long_format = 1;
-        if (strcmp(argv[i], "--json") == 0) json = 1;
+    struct arg_lit *human = arg_lit0("h", NULL, "human readable output");
+    struct arg_lit *longf = arg_lit0("l", NULL, "long format");
+    struct arg_lit *jsonf = arg_lit0(NULL, "json", "output in JSON format");
+    struct arg_lit *help  = arg_lit0(NULL, "help", "print this help and exit");
+    struct arg_end *end   = arg_end(20);
+    void *argtable[] = {human, longf, jsonf, help, end};
+
+    int nerrors = arg_parse(argc, argv, argtable);
+
+    if (help->count > 0) {
+        printf("Usage: mops sys cpu");
+        arg_print_syntax(stdout, argtable, "\n");
+        printf("Show CPU utilization statistics.\n\n");
+        arg_print_glossary(stdout, argtable, "  %-25s %s\n");
+        arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+        return 0;
     }
-    
+
+    if (nerrors > 0) {
+        arg_print_errors(stdout, end, "mops sys cpu");
+        arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+        return 1;
+    }
+
+    int human_readable = (human->count > 0);
+    int long_format = (longf->count > 0);
+    int json = (jsonf->count > 0);
+
     struct cpu_stat stat1, stat2;
     
     if (read_cpu_stat(&stat1) != 0) {
         fprintf(stderr, "Error: Could not read /proc/stat. Are you on Linux?\n");
+        arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
         return 1;
     }
     
@@ -65,6 +86,7 @@ int cmd_sys_cpu(int argc, char **argv) {
     
     if (read_cpu_stat(&stat2) != 0) {
         fprintf(stderr, "Error: Could not read /proc/stat.\n");
+        arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
         return 1;
     }
 
@@ -105,6 +127,8 @@ int cmd_sys_cpu(int argc, char **argv) {
             printf("%.2f\n", usage);
         }
     }
+
+    arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
     return 0;
 }
 
@@ -113,17 +137,37 @@ int cmd_sys_cpu(int argc, char **argv) {
  */
 
 int cmd_sys_mem(int argc, char **argv) {
-    int human_readable = 0;
-    int json = 0;
-    for (int i = 0; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0) human_readable = 1;
-        if (strcmp(argv[i], "--json") == 0) json = 1;
+    struct arg_lit *human = arg_lit0("h", NULL, "human readable output");
+    struct arg_lit *jsonf = arg_lit0(NULL, "json", "output in JSON format");
+    struct arg_lit *help  = arg_lit0(NULL, "help", "print this help and exit");
+    struct arg_end *end   = arg_end(20);
+    void *argtable[] = {human, jsonf, help, end};
+
+    int nerrors = arg_parse(argc, argv, argtable);
+
+    if (help->count > 0) {
+        printf("Usage: mops sys mem");
+        arg_print_syntax(stdout, argtable, "\n");
+        printf("Show system memory and swap utilization.\n\n");
+        arg_print_glossary(stdout, argtable, "  %-25s %s\n");
+        arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+        return 0;
     }
+
+    if (nerrors > 0) {
+        arg_print_errors(stdout, end, "mops sys mem");
+        arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+        return 1;
+    }
+
+    int human_readable = (human->count > 0);
+    int json = (jsonf->count > 0);
     
     FILE *fp = fopen("/proc/meminfo", "r");
     if (!fp) {
         if (json) printf("{\"error\":\"Could not open /proc/meminfo\"}\n");
         else fprintf(stderr, "Error: Could not open /proc/meminfo. Are you on Linux?\n");
+        arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
         return 1;
     }
 
@@ -171,6 +215,7 @@ int cmd_sys_mem(int argc, char **argv) {
                mem_total, mem_used, mem_available, swap_total, swap_used);
     }
 
+    arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
     return 0;
 }
 
@@ -547,7 +592,8 @@ int cmd_sys(int argc, char **argv) {
 
     const char *subcmd = argv[1];
 
-    if (strcmp(subcmd, "--help") == 0) {
+    if (strcmp(subcmd, "--help") == 0 || strcmp(subcmd, "-h") == 0) {
+        printf("mops sys - System and Hardware Monitoring\n\n");
         printf("Usage: mops sys <command> [options]\n\n");
         printf("Commands:\n");
         printf("  cpu       Show CPU utilization\n");
@@ -556,11 +602,10 @@ int cmd_sys(int argc, char **argv) {
         printf("  tpu       Show TPU availability\n");
         printf("  oom       List Out-Of-Memory killed processes from dmesg\n");
         printf("  cgroup    Show Cgroup / Docker container resource limits and usage\n\n");
-        printf("Options:\n");
-        printf("  -h        Human-readable output (if applicable)\n");
-        printf("  -l        Long format (include extra information)\n");
-        printf("  --pids    Show GPU process mapping (for 'gpu' command)\n");
+        printf("Generic Options:\n");
         printf("  --json    Output in JSON format\n");
+        printf("  -h        Human-readable output\n\n");
+        printf("Run 'mops sys <command> --help' for specific command options.\n");
         return 0;
     }
 
