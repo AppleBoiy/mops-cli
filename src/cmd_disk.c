@@ -5,6 +5,26 @@
 #include <sys/statvfs.h>
 #include <errno.h>
 
+/*
+ * Helper to format byte counts into human-readable strings (K, M, G).
+ */
+static void format_bytes_human(unsigned long long bytes, char *buf, size_t len) {
+    const char *suffixes[] = {"B", "K", "M", "G", "T", "P"};
+    int i = 0;
+    double d_bytes = bytes;
+
+    while (d_bytes >= 1024.0 && i < 5) {
+        d_bytes /= 1024.0;
+        i++;
+    }
+
+    if (i == 0) {
+        snprintf(buf, len, "%llu%s", bytes, suffixes[i]);
+    } else {
+        snprintf(buf, len, "%.1f%s", d_bytes, suffixes[i]);
+    }
+}
+
 static int do_disk_status(int human, int long_fmt, int json) {
     FILE *fp = fopen("/proc/diskstats", "r");
     if (!fp) {
@@ -117,8 +137,16 @@ static int do_disk_usage(int human, int long_fmt, int json) {
         printf("Disk Usage (Root Filesystem '/'):\n");
 
         if (long_fmt) {
-            printf("  Block size:    %lu bytes\n", (unsigned long)stat.f_bsize);
-            printf("  Fragment size: %lu bytes\n", (unsigned long)stat.f_frsize);
+            if (human) {
+                char bsize_buf[32], frsize_buf[32];
+                format_bytes_human((unsigned long long)stat.f_bsize, bsize_buf, sizeof(bsize_buf));
+                format_bytes_human((unsigned long long)stat.f_frsize, frsize_buf, sizeof(frsize_buf));
+                printf("  Block size:    %s\n", bsize_buf);
+                printf("  Fragment size: %s\n", frsize_buf);
+            } else {
+                printf("  Block size:    %lu bytes\n", (unsigned long)stat.f_bsize);
+                printf("  Fragment size: %lu bytes\n", (unsigned long)stat.f_frsize);
+            }
             printf("  Blocks total:  %lu\n", (unsigned long)stat.f_blocks);
             printf("  Blocks free:   %lu\n", (unsigned long)stat.f_bfree);
             printf("  Inodes total:  %lu\n", (unsigned long)stat.f_files);
@@ -126,12 +154,13 @@ static int do_disk_usage(int human, int long_fmt, int json) {
         }
 
         if (human) {
-            double total_gb = (double)total_b / (1024.0 * 1024.0 * 1024.0);
-            double used_gb = (double)used_b / (1024.0 * 1024.0 * 1024.0);
-            double free_gb = (double)free_b / (1024.0 * 1024.0 * 1024.0);
-            printf("  Total: %.2f GB\n", total_gb);
-            printf("  Used:  %.2f GB\n", used_gb);
-            printf("  Free:  %.2f GB\n", free_gb);
+            char total_buf[32], used_buf[32], free_buf[32];
+            format_bytes_human(total_b, total_buf, sizeof(total_buf));
+            format_bytes_human(used_b, used_buf, sizeof(used_buf));
+            format_bytes_human(free_b, free_buf, sizeof(free_buf));
+            printf("  Total: %s\n", total_buf);
+            printf("  Used:  %s\n", used_buf);
+            printf("  Free:  %s\n", free_buf);
         } else {
             printf("  Total: %llu bytes\n", total_b);
             printf("  Used:  %llu bytes\n", used_b);

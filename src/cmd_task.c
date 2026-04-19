@@ -12,8 +12,6 @@
 #include <ctype.h>
 #include "mops.h"
 
-#ifdef DEV_MODE
-
 /*
  * A minimal JSON string escaper.
  * It handles quotes, backslashes, and basic control characters.
@@ -52,7 +50,7 @@ static int insert_task(int pid, const char *cmd, const char *status) {
     sqlite3_stmt *stmt;
     int id = -1;
     const char *sql = "INSERT INTO tasks (pid, command, status) VALUES (?, ?, ?)";
-    
+
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
         sqlite3_bind_int(stmt, 1, pid);
         sqlite3_bind_text(stmt, 2, cmd, -1, SQLITE_TRANSIENT);
@@ -73,7 +71,7 @@ static void update_task_status(int id, const char *status) {
 
     sqlite3_stmt *stmt;
     const char *sql = "UPDATE tasks SET status = ? WHERE id = ?";
-    
+
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, status, -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 2, id);
@@ -88,7 +86,7 @@ static void update_task_pid(int id, int pid) {
 
     sqlite3_stmt *stmt;
     const char *sql = "UPDATE tasks SET pid = ? WHERE id = ?";
-    
+
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
         sqlite3_bind_int(stmt, 1, pid);
         sqlite3_bind_int(stmt, 2, id);
@@ -103,9 +101,9 @@ static void update_task_pid(int id, int pid) {
 
 static void notify_webhook(const char *url, int task_id, int exit_code) {
     char curl_cmd[1024];
-    snprintf(curl_cmd, sizeof(curl_cmd), 
+    snprintf(curl_cmd, sizeof(curl_cmd),
              "curl -s -X POST -H 'Content-Type: application/json' "
-             "-d '{\"task_id\":%d, \"exit_code\":%d}' %s > /dev/null", 
+             "-d '{\"task_id\":%d, \"exit_code\":%d}' %s > /dev/null",
              task_id, exit_code, url);
     if (system(curl_cmd) == -1) {
         /* Ignore execution failures for background webhooks */
@@ -121,35 +119,35 @@ int cmd_task_exec(int argc, char **argv) {
         fprintf(stderr, "Usage: mops task exec \"<command>\" [--notify <url>]\n");
         return 1;
     }
-    
+
     const char *cmd = argv[1];
     const char *notify_url = NULL;
-    
+
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--notify") == 0 && i + 1 < argc) {
             notify_url = argv[i+1];
             break;
         }
     }
-    
+
     int task_id = insert_task(getpid(), cmd, "RUNNING");
-    
+
     printf("Executing synchronously (Task ID %d): %s\n", task_id, cmd);
     int ret = system(cmd);
     int exit_code = 1;
-    
+
     if (ret != -1) {
         exit_code = WEXITSTATUS(ret);
     } else {
         perror("system");
     }
-    
+
     update_task_status(task_id, exit_code == 0 ? "FINISHED" : "FAILED");
-    
+
     if (notify_url) {
         notify_webhook(notify_url, task_id, exit_code);
     }
-    
+
     return exit_code;
 }
 
@@ -158,30 +156,30 @@ int cmd_task_bg(int argc, char **argv) {
         fprintf(stderr, "Usage: mops task bg \"<command>\" [--notify <url>]\n");
         return 1;
     }
-    
+
     const char *cmd = argv[1];
     const char *notify_url = NULL;
-    
+
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--notify") == 0 && i + 1 < argc) {
             notify_url = argv[i+1];
             break;
         }
     }
-    
+
     int task_id = insert_task(0, cmd, "STARTING");
     if (task_id < 0) {
         fprintf(stderr, "Failed to register background task in database.\n");
         return 1;
     }
-    
+
     pid_t pid = fork();
-    
+
     if (pid < 0) {
         perror("fork failed");
         return 1;
     }
-    
+
     if (pid > 0) {
         /* Parent process */
         update_task_pid(task_id, pid);
@@ -190,23 +188,19 @@ int cmd_task_bg(int argc, char **argv) {
         return 0;
     } else {
         /* Child process */
-        
-        /*
-         * 1. Create a new session and detach from controlling terminal
-         */
+
+        /* 1. Create a new session and detach from controlling terminal */
         if (setsid() < 0) {
             exit(EXIT_FAILURE);
         }
-        
-        /*
-         * 2. Redirect standard I/O to task-specific log files
-         */
+
+        /* 2. Redirect standard I/O to task-specific log files */
         char log_path[256];
         snprintf(log_path, sizeof(log_path), "/tmp/mops_task_%d.log", task_id);
-        
+
         int fd_in = open("/dev/null", O_RDONLY);
         int fd_out = open(log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
-        
+
         if (fd_in >= 0) {
             dup2(fd_in, STDIN_FILENO);
             close(fd_in);
@@ -216,80 +210,43 @@ int cmd_task_bg(int argc, char **argv) {
             dup2(fd_out, STDERR_FILENO);
             close(fd_out);
         }
-        
-        /*
-         * 3. Execute the command via shell
-         */
+
+        /* 3. Execute the command via shell */
         int ret = system(cmd);
         int exit_code = 1;
         if (ret != -1 && WIFEXITED(ret)) {
             exit_code = WEXITSTATUS(ret);
         }
-        
-        /*
-         * 4. Update status dynamically from the background process
-         */
+
+        /* 4. Update status dynamically from the background process */
         update_task_status(task_id, exit_code == 0 ? "FINISHED" : "FAILED");
-        
-        /*
-         * 5. Trigger webhook if requested
-         */
+
+        /* 5. Trigger webhook if requested */
         if (notify_url) {
             notify_webhook(notify_url, task_id, exit_code);
         }
-        
+
         exit(exit_code);
     }
 }
 
-int cmd_task_queue(int argc, char **argv) {
+int cmd_task_submit(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: mops task queue \"<command>\" | --exec\n");
+        fprintf(stderr, "Usage: mops task submit \"<command>\"\n");
         return 1;
     }
-    
-    if (strcmp(argv[1], "--exec") == 0) {
-        sqlite3 *db = db_get_connection();
-        if (!db) return 1;
-        
-        sqlite3_stmt *stmt;
-        const char *sql = "SELECT id, command FROM tasks WHERE status = 'QUEUED' ORDER BY id ASC";
-        
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
-            fprintf(stderr, "Failed to query queued tasks.\n");
-            return 1;
-        }
-        
-        int found = 0;
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            found = 1;
-            int id = sqlite3_column_int(stmt, 0);
-            const char *cmd_text = (const char *)sqlite3_column_text(stmt, 1);
-            
-            printf("Executing queued task %d: %s\n", id, cmd_text);
-            update_task_status(id, "RUNNING");
-            
-            int ret = system(cmd_text);
-            if (ret == 0) {
-                update_task_status(id, "FINISHED");
-            } else {
-                update_task_status(id, "FAILED");
-            }
-        }
-        
-        sqlite3_finalize(stmt);
-        
-        if (!found) {
-            printf("No queued tasks to execute.\n");
-        }
-        return 0;
-    }
-    
+
     const char *cmd = argv[1];
-    insert_task(0, cmd, "QUEUED");
-    printf("Task added to queue: %s\n", cmd);
+    int id = insert_task(0, cmd, "QUEUED");
+    if (id > 0) {
+        printf("Task %d submitted to queue: %s\n", id, cmd);
+    } else {
+        fprintf(stderr, "Failed to submit task to queue.\n");
+        return 1;
+    }
     return 0;
 }
+
 
 int cmd_task_list(int argc, char **argv) {
     int json = 0;
@@ -306,12 +263,11 @@ int cmd_task_list(int argc, char **argv) {
 
     sqlite3_stmt *stmt;
     const char *sql = "SELECT id, pid, command, status FROM tasks";
-    
+
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        fprintf(stderr, "Failed to query tasks.\n");
         return 1;
     }
-    
+
     if (json) {
         printf("[");
     } else {
@@ -325,10 +281,10 @@ int cmd_task_list(int argc, char **argv) {
         int pid = sqlite3_column_int(stmt, 1);
         const unsigned char *cmd = sqlite3_column_text(stmt, 2);
         const unsigned char *status = sqlite3_column_text(stmt, 3);
-        
+
         char current_status[32];
         snprintf(current_status, sizeof(current_status), "%s", status);
-        
+
         /*
          * Check if a running task is actually still alive.
          */
@@ -342,7 +298,7 @@ int cmd_task_list(int argc, char **argv) {
                 update_task_status(id, "FINISHED");
             }
         }
-        
+
         if (json) {
             if (!first) printf(",");
             printf("{\"id\":%d,\"pid\":%d,\"status\":\"%s\",\"command\":", id, pid, current_status);
@@ -353,7 +309,7 @@ int cmd_task_list(int argc, char **argv) {
             printf("%-5d | %-10d | %-12s | %s\n", id, pid, current_status, cmd);
         }
     }
-    
+
     if (json) {
         printf("]\n");
     }
@@ -361,35 +317,36 @@ int cmd_task_list(int argc, char **argv) {
     return 0;
 }
 
+
 int cmd_task_kill(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "Usage: mops task kill <task_id>\n");
         return 1;
     }
-    
+
     int task_id = atoi(argv[1]);
     if (task_id <= 0) {
         fprintf(stderr, "Invalid task ID.\n");
         return 1;
     }
-    
+
     sqlite3 *db = db_get_connection();
     if (!db) return 1;
 
     sqlite3_stmt *stmt;
     const char *sql = "SELECT pid, status FROM tasks WHERE id = ?";
-    
+
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
         fprintf(stderr, "Failed to prepare query.\n");
         return 1;
     }
-    
+
     sqlite3_bind_int(stmt, 1, task_id);
-    
+
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         int pid = sqlite3_column_int(stmt, 0);
         const unsigned char *status = sqlite3_column_text(stmt, 1);
-        
+
         if (strcmp((const char *)status, "RUNNING") == 0) {
             if (kill(pid, SIGTERM) == 0) {
                 printf("Sent SIGTERM to task %d (PID %d)\n", task_id, pid);
@@ -403,38 +360,39 @@ int cmd_task_kill(int argc, char **argv) {
     } else {
         printf("Task ID %d not found.\n", task_id);
     }
-    
+
     sqlite3_finalize(stmt);
     return 0;
 }
+
 
 int cmd_task_logs(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "Usage: mops task logs <task_id> [--tail]\n");
         return 1;
     }
-    
+
     int task_id = atoi(argv[1]);
     int tail = 0;
-    
+
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--tail") == 0) tail = 1;
     }
-    
+
     char log_path[256];
     snprintf(log_path, sizeof(log_path), "/tmp/mops_task_%d.log", task_id);
-    
+
     if (access(log_path, F_OK) != 0) {
         fprintf(stderr, "Log file not found for Task %d: %s\n", task_id, log_path);
         return 1;
     }
-    
+
     if (tail) {
         execlp("tail", "tail", "-f", log_path, NULL);
     } else {
         execlp("cat", "cat", log_path, NULL);
     }
-    
+
     perror("execlp");
     return 1;
 }
@@ -466,18 +424,18 @@ int cmd_task_clean(int argc, char **argv) {
 
     while ((ent = readdir(dir)) != NULL) {
         if (!isdigit((unsigned char)ent->d_name[0])) continue;
-        
+
         char path[512];
         snprintf(path, sizeof(path), "/proc/%s/stat", ent->d_name);
-        
+
         FILE *fp = fopen(path, "r");
         if (!fp) continue;
-        
+
         int pid, ppid;
         char comm[256];
         char state;
-        
-        /* 
+
+        /*
          * Parse /proc/[pid]/stat
          * Format: pid (comm) state ppid ...
          */
@@ -529,7 +487,7 @@ int cmd_task_clean(int argc, char **argv) {
             printf("\nRun 'mops task clean --force' to aggressively terminate orphaned workers.\n");
         }
     }
-    
+
     return 0;
 }
 
@@ -539,24 +497,28 @@ int cmd_task_clean(int argc, char **argv) {
 
 int cmd_task(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: mops task <exec|bg|queue|list|logs|clean|kill> [args...]\n");
+        fprintf(stderr, "Usage: mops task <command> [options]\n");
+        fprintf(stderr, "Run 'mops task --help' for more information.\n");
         return 1;
     }
 
     const char *subcmd = argv[1];
-    
+
     if (strcmp(subcmd, "--help") == 0 || strcmp(subcmd, "-h") == 0) {
         printf("Usage: mops task <command> [options]\n\n");
         printf("Commands:\n");
-        printf("  exec      Execute a command synchronously (\"<cmd>\" [--notify <url>])\n");
-        printf("  bg        Start a background task and track it (\"<cmd>\" [--notify <url>])\n");
-        printf("  queue     Add a command to the task queue (\"<cmd>\" | --exec)\n");
-        printf("  list      List all tracked tasks and their status\n");
-        printf("  logs      Read or tail stdout/stderr for a task (<id> [--tail])\n");
-        printf("  clean     Sweep zombie processes and orphaned workers ([--force])\n");
-        printf("  kill      Send SIGTERM to a running task (<id>)\n\n");
+        printf("  submit (qsub, queue)   Submit a command to the worker queue\n");
+        printf("  list (qstat)           List all tracked tasks and their status\n");
+        printf("  kill (qdel)            Send SIGTERM to a running task\n");
+        printf("  exec                   Execute a command synchronously\n");
+        printf("  bg                     Start a background task and track it\n");
+        printf("  logs                   Read or tail stdout/stderr for a task\n");
+        printf("  clean                  Sweep zombie processes and orphaned workers\n\n");
         printf("Options:\n");
-        printf("  --json    Output in JSON format (for 'list' and 'clean')\n");
+        printf("  --notify <url>         Send a webhook upon task completion ('exec', 'bg')\n");
+        printf("  --tail                 Tail log output ('logs')\n");
+        printf("  --force                Aggressively kill orphaned workers ('clean')\n");
+        printf("  --json                 Output in JSON format ('list', 'clean')\n");
         return 0;
     }
 
@@ -564,11 +526,11 @@ int cmd_task(int argc, char **argv) {
         return cmd_task_exec(argc - 1, argv + 1);
     } else if (strcmp(subcmd, "bg") == 0) {
         return cmd_task_bg(argc - 1, argv + 1);
-    } else if (strcmp(subcmd, "queue") == 0) {
-        return cmd_task_queue(argc - 1, argv + 1);
-    } else if (strcmp(subcmd, "list") == 0) {
+    } else if (strcmp(subcmd, "submit") == 0 || strcmp(subcmd, "queue") == 0 || strcmp(subcmd, "qsub") == 0) {
+        return cmd_task_submit(argc - 1, argv + 1);
+    } else if (strcmp(subcmd, "list") == 0 || strcmp(subcmd, "qstat") == 0) {
         return cmd_task_list(argc - 1, argv + 1);
-    } else if (strcmp(subcmd, "kill") == 0) {
+    } else if (strcmp(subcmd, "kill") == 0 || strcmp(subcmd, "qdel") == 0) {
         return cmd_task_kill(argc - 1, argv + 1);
     } else if (strcmp(subcmd, "logs") == 0) {
         return cmd_task_logs(argc - 1, argv + 1);
@@ -576,19 +538,7 @@ int cmd_task(int argc, char **argv) {
         return cmd_task_clean(argc - 1, argv + 1);
     } else {
         fprintf(stderr, "Unknown task subcommand: %s\n", subcmd);
-        fprintf(stderr, "Usage: mops task <exec|bg|queue|list|logs|clean|kill> [args...]\n");
         fprintf(stderr, "Run 'mops task --help' for more information.\n");
         return 1;
     }
 }
-
-#else
-
-int cmd_task(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    fprintf(stderr, "Error: The 'task' command is only available when built with DEV_MODE.\n");
-    return 1;
-}
-
-#endif

@@ -1,148 +1,140 @@
 .TH MOPS 1 "April 2026" "1.0" "User Commands"
 .SH NAME
-mops \- Multipurpose Operations CLI for DevOps and MLOps
+mops \- A Lightweight PBS-style Job Scheduler and MLOps Utility
 .SH SYNOPSIS
 .B mops
 \fI<command>\fR [\fI<subcommand>\fR] [\fIoptions\fR]
 .SH DESCRIPTION
 .B mops
-is a centralized utility designed for Linux system monitoring, hardware metrics, containerized environment tracking, and background task management. It bridges the gap between hardware monitoring and heavy compute workloads, making it an ideal fast-triage tool for MLOps and infrastructure engineers.
+is a high-performance C utility for MLOps and DevOps on Linux. It functions as both a lightweight, persistent job scheduling system (a minimalist replica of PBS) and a fast-triage tool for system monitoring. It provides instant feedback on hardware, containers, and the lifecycle of background tasks.
 .SH COMMAND MODULES
 .B mops
 is divided into several subcommands. Use \fBmops <command> \-\-help\fR for module-specific documentation.
+.SS worker \- The Scheduler Daemon
+Manages the persistent background worker that polls the database and executes queued tasks.
+.TP
+.B start
+Forks and daemonizes the scheduler. The worker will run continuously, polling the database for tasks with a 'QUEUED' status to execute.
+.TP
+.B stop
+Sends a SIGTERM signal to the running worker daemon to shut it down gracefully.
+.TP
+.B status
+Checks if the worker daemon's PID file exists and if the process is currently running.
+
+.SS task \- Job Lifecycle Management
+Submits and manages jobs in the scheduler. Provides PBS-style aliases for common commands.
+.TP
+.B submit, qsub, queue \fI"<cmd>"\fR
+Submits a command to the queue. The worker daemon will pick it up for asynchronous execution.
+.TP
+.B list, qstat
+Lists all tracked jobs (queued, running, finished, failed) and their status from the database.
+.TP
+.B kill, qdel \fI<id>\fR
+Sends a SIGTERM signal to a running job's process and updates its status to 'KILLED'.
+.TP
+.B bg \fI"<cmd>"\fR [\fB\-\-notify\fR \fI<url>\fR]
+A lower-level command to immediately run a command as a background daemon without queuing, while still tracking it in the database.
+.TP
+.B logs \fI<id>\fR [\fB\-\-tail\fR]
+Reads or tails the stdout/stderr log file for a specific job ID.
+.TP
+.B clean [\fB\-\-force\fR]
+Scans the process tree for zombie processes and orphaned workers. Use \-\-force to aggressively send SIGKILL to orphaned python/worker nodes.
+.PP
+\fBOptions for task:\fR
+.br
+  \fB\-\-notify <url>\fR    Sends a webhook POST on job completion.
+.br
+  \fB\-\-json\fR           Output in JSON format (for 'list' and 'clean').
+
 .SS disk \- Disk Operations
-Manages and visualizes disk IO, usage, and mount points.
 .TP
 .B status
 Show disk read/write statistics from /proc/diskstats.
 .TP
 .B usage
-Show total, used, and free space on the root filesystem using statvfs.
+Show total, used, and free space on the root filesystem.
 .TP
 .B mounts
-Display currently mounted drives parsed from /proc/mounts.
+Display currently mounted drives from /proc/mounts.
 .PP
 \fBOptions for disk:\fR
 .br
-  \fB\-h\fR        Human-readable output (MB instead of raw sectors)
-.br
-  \fB\-l\fR        Long format (include extra information columns)
-.br
-  \fB\-\-json\fR    Output in JSON format
+  \fB\-h, \-\-json, \-l\fR
 
 .SS sys \- System & Hardware Metrics
-Monitors CPU, GPU, TPU, and container limits.
 .TP
-.B cpu
-Show CPU utilization parsed from /proc/stat.
-.TP
-.B gpu
-Show GPU utilization. Interfaces with nvidia-smi for VRAM, power, and temperature.
-.TP
-.B tpu
-Show TPU availability by scanning /dev/accel*.
+.B cpu, gpu, tpu
+Show utilization for hardware components.
 .TP
 .B oom
-List Out-Of-Memory killed processes from the kernel dmesg ring buffer.
+List Out-Of-Memory killed processes from dmesg.
 .TP
 .B cgroup
-Show Cgroup / Docker container resource limits and actual memory usage.
+Show resource limits for the current Docker/cgroup environment.
 .PP
 \fBOptions for sys:\fR
 .br
-  \fB\-h\fR        Human-readable output
-.br
-  \fB\-l\fR        Long format (include extra information columns)
-.br
-  \fB\-\-pids\fR    Map active processes to GPU allocations (for the 'gpu' command)
-.br
-  \fB\-\-json\fR    Output in JSON format
+  \fB\-h, \-\-json, \-l, \-\-pids\fR
 
 .SS net \- Network Operations
 .TP
 .B port \fI<number>\fR
-Finds the exact process ID (PID) and command line associated with a local TCP port by cross-referencing /proc/net/tcp and /proc/[pid]/fd socket inodes.
+Finds the process ID (PID) bound to a local TCP port.
 .PP
 \fBOptions for net:\fR
 .br
-  \fB\-\-json\fR    Output in JSON format
-
-.SS task \- Task Management
-Tracks and manages asynchronous or queued tasks using a local SQLite database. (Note: Only available when compiled with DEV_MODE).
-.TP
-.B exec \fI"<cmd>"\fR [\fB\-\-notify\fR \fI<url>\fR]
-Execute a command synchronously.
-.TP
-.B bg \fI"<cmd>"\fR [\fB\-\-notify\fR \fI<url>\fR]
-Start a background task, daemonize it (setsid), redirect output, and track its PID.
-.TP
-.B queue \fI"<cmd>"\fR | \fB\-\-exec\fR
-Add a command to the queue, or use \-\-exec to consume and execute all queued tasks sequentially.
-.TP
-.B list
-List all tracked tasks and their status. Automatically checks the OS process table to verify if running tasks are still alive.
-.TP
-.B logs \fI<id>\fR [\fB\-\-tail\fR]
-Read or tail stdout/stderr for a tracked background task.
-.TP
-.B clean [\fB\-\-force\fR]
-Sweep zombie processes and orphaned workers from the process tree. Use \-\-force to aggressively send SIGKILL to orphaned python/worker nodes attached to init.
-.TP
-.B kill \fI<id>\fR
-Send SIGTERM to a running task.
-.PP
-\fBOptions for task:\fR
-.br
-  \fB\-\-json\fR    Output in JSON format (for 'list' and 'clean' commands)
+  \fB\-\-json\fR
 
 .SS gcp \- Google Cloud Platform Utilities
-Provides fast, dependency-free interactions with the GCP Metadata Server and wrappers for complex gcloud commands.
 .TP
 .B whoami
-Instantly print the active Service Account email, Project ID, Zone, and attached Network Tags of the current VM using the local Metadata Server.
+Instantly print the active Service Account, Project, and Zone.
 .TP
 .B spot-watch \fB\-\-exec\fR \fI"<cmd>"\fR
-Poll the GCP preempted endpoint. If a shutdown signal is detected, instantly execute the provided command (e.g., to save checkpoints).
+Poll for spot termination and execute a command before shutdown.
 .TP
-.B tunnel \fI<instance>\fR \fI<remote-port>\fR:\fI<local-port>\fR
-Establish an IAP tunnel to a private GCP instance, automatically constructing the underlying gcloud compute ssh command.
+.B tunnel \fI<instance>\fR \fI<remote:local>\fR
+Establish an IAP tunnel to a private GCP instance.
 .TP
-.B run-with-secrets \fI"<cmd>"\fR
-Dynamically fetch secrets from GCP Secret Manager and inject them as environment variables into the provided command without writing them to disk.
+.B run-with-secrets \fB\-\-secret=\fI"ENV=NAME"\fR \fI"<cmd>"\fR
+Fetch a GCP secret and inject it into a command's environment.
 .PP
 \fBOptions for gcp:\fR
 .br
-  \fB\-\-json\fR    Output in JSON format (for 'whoami' command)
+  \fB\-\-json\fR
 
+.SH WORKFLOW EXAMPLE
+.TP
+1. Start the scheduler daemon in the background:
+.B mops worker start
+.TP
+2. Submit several long-running Python scripts to the queue:
+.B mops task submit "python train_model_a.py"
+.br
+.B mops qsub "python process_data.py --input /data/large.csv"
+.TP
+3. Check the status of all jobs in the queue:
+.B mops task list
+.br
+.B mops qstat
+.TP
+4. Tail the logs of a specific running job:
+.B mops task logs 2 --tail
+.TP
+5. Stop the scheduler daemon:
+.B mops worker stop
 .SH FILES
 .TP
 .B mops.db
-SQLite database file created in the current working directory to track background task states.
+SQLite database file to track job states.
+.TP
+.B /tmp/mops_worker.pid
+PID file for the background scheduler daemon.
 .TP
 .B /tmp/mops_task_<id>.log
-Standard output and standard error log files for daemonized background tasks.
-
-.SH EXAMPLES
-.TP
-Check actual memory usage and limits inside a Docker container:
-.B mops sys cgroup
-.TP
-Find out which exact process is hogging port 8080:
-.B mops net port 8080
-.TP
-See exactly which background scripts are eating GPU VRAM:
-.B mops sys gpu \-h \-\-pids
-.TP
-Start a long-running batch job and tail its logs:
-.B mops task bg "python train.py"
-.br
-.B mops task logs 1 \-\-tail
-.TP
-Clean up orphaned multiprocessing workers that failed to exit gracefully:
-.B mops task clean \-\-force
-.TP
-Forward local port 8080 to a remote TensorBoard instance over IAP:
-.B mops gcp tunnel worker-gpu-1 6006:8080
-
+Standard output/error log files for executed jobs.
 .SH AUTHOR
 Chaipat J. (GitHub: AppleBoiy, Email: contact@chaipat.cc)
