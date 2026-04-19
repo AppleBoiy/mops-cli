@@ -2,6 +2,12 @@
 
 All notable changes to the `mops` CLI project will be documented in this file.
 
+## [1.1.1] - 2026-04-19
+
+### Fixed
+- **CLI Parsing**: Fixed a bug where `mops mem` and `mops qstat` aliases dropped any trailing command-line flags.
+- **CI Pipelines**: Explicitly mock `TERM=xterm` in testing environments to prevent `mops dashboard` from crashing headless CI runners.
+
 ## [1.1.0] - 2026-04-19
 
 ### Added

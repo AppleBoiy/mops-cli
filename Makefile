@@ -3,7 +3,7 @@ CFLAGS = -Wall -Wextra -std=c11 -O2 -g -D_XOPEN_SOURCE=700 -MMD -MP
 LDFLAGS ?= 
 LDLIBS = -lsqlite3 -ldl -lncurses
 
-VERSION ?= 1.1.0
+VERSION ?= 1.1.1
 
 TARGET = mops
 SRC_DIR = src
