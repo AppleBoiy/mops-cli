@@ -30,14 +30,28 @@ static void handle_sigterm(int sig) {
  * Trigger a webhook notification upon task completion.
  */
 static void notify_webhook_from_worker(int task_id, int exit_code, const char *url) {
-    char curl_cmd[2048];
-    snprintf(curl_cmd, sizeof(curl_cmd), 
-             "curl -s -X POST -H 'Content-Type: application/json' "
-             "-d '{\"task_id\":%d, \"exit_code\":%d}' %s > /dev/null 2>&1", 
-             task_id, exit_code, url);
-    if (system(curl_cmd) == -1) {
-        /* This runs in a daemon, so we can't easily log failure. Fire and forget. */
+    if (!url || url[0] == '\0') return;
+
+    pid_t cpid = fork();
+    if (cpid == 0) {
+        /* Child: silence output */
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        char json[128];
+        snprintf(json, sizeof(json), "{\"task_id\":%d, \"exit_code\":%d}", task_id, exit_code);
+        execlp("curl", "curl",
+               "-s", "-X", "POST",
+               "-H", "Content-Type: application/json",
+               "-d", json,
+               url,
+               (char *)NULL);
+        _exit(127); /* If exec fails */
     }
+    /* Parent: fire-and-forget */
 }
 
 /*
@@ -65,8 +79,10 @@ static void run_worker_loop(void) {
                 char cmd_buf[2048];
                 char notify_url_buf[2048] = {0};
                 strncpy(cmd_buf, cmd, sizeof(cmd_buf) - 1);
+                cmd_buf[sizeof(cmd_buf) - 1] = '\0';
                 if (notify_url) {
                     strncpy(notify_url_buf, notify_url, sizeof(notify_url_buf) - 1);
+                    notify_url_buf[sizeof(notify_url_buf) - 1] = '\0';
                 }
                 
                 sqlite3_finalize(stmt);

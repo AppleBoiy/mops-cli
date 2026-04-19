@@ -10,6 +10,7 @@
 #include <sqlite3.h>
 #include <dirent.h>
 #include <ctype.h>
+#include <errno.h>
 #include "mops.h"
 
 /*
@@ -100,14 +101,28 @@ static void update_task_pid(int id, int pid) {
  */
 
 static void notify_webhook(const char *url, int task_id, int exit_code) {
-    char curl_cmd[1024];
-    snprintf(curl_cmd, sizeof(curl_cmd),
-             "curl -s -X POST -H 'Content-Type: application/json' "
-             "-d '{\"task_id\":%d, \"exit_code\":%d}' %s > /dev/null",
-             task_id, exit_code, url);
-    if (system(curl_cmd) == -1) {
-        /* Ignore execution failures for background webhooks */
+    if (!url || url[0] == '\0') return;
+
+    pid_t cpid = fork();
+    if (cpid == 0) {
+        /* Child: silence output */
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        char json[128];
+        snprintf(json, sizeof(json), "{\"task_id\":%d, \"exit_code\":%d}", task_id, exit_code);
+        execlp("curl", "curl",
+               "-s", "-X", "POST",
+               "-H", "Content-Type: application/json",
+               "-d", json,
+               url,
+               (char *)NULL);
+        _exit(127); /* If exec fails */
     }
+    /* Parent: fire-and-forget */
 }
 
 /*
@@ -290,12 +305,11 @@ int cmd_task_list(int argc, char **argv) {
          */
         if (strcmp(current_status, "RUNNING") == 0 && pid > 0) {
             if (kill(pid, 0) != 0) {
-                /*
-                 * Process doesn't exist or we have no permission;
-                 * assume dead.
-                 */
-                snprintf(current_status, sizeof(current_status), "FINISHED");
-                update_task_status(id, "FINISHED");
+                if (errno == ESRCH) {
+                    /* Process not found; mark as finished */
+                    snprintf(current_status, sizeof(current_status), "FINISHED");
+                    update_task_status(id, "FINISHED");
+                }
             }
         }
 
