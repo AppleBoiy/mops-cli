@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS = -Wall -Wextra -std=c11 -O2 -g -D_XOPEN_SOURCE=700 -MMD -MP -DVERSION=\"$(VERSION)\"
+CFLAGS = -Wall -Wextra -std=c11 -O2 -g -D_XOPEN_SOURCE=700 -MMD -MP -DVERSION=\"$(VERSION)\" -I$(SRC_DIR) -Ilib
 LDFLAGS ?= 
 LDLIBS = -lsqlite3 -ldl -lncurses
 
@@ -7,10 +7,11 @@ VERSION ?= 1.1.2
 
 TARGET = mops
 SRC_DIR = src
+LIB_DIR = lib
 OBJ_DIR = obj
 
-SRCS = $(wildcard $(SRC_DIR)/*.c)
-OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
+SRCS = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(LIB_DIR)/*.c)
+OBJS = $(addprefix $(OBJ_DIR)/, $(notdir $(SRCS:.c=.o)))
 DEPS = $(OBJS:.o=.d)
 
 PREFIX ?= /usr/local
@@ -38,7 +39,9 @@ directories:
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | directories
+vpath %.c $(SRC_DIR) $(LIB_DIR)
+
+$(OBJ_DIR)/%.o: %.c | directories
 	$(CC) $(CFLAGS) -c $< -o $@
 
 -include $(DEPS)
