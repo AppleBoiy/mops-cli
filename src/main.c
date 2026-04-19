@@ -23,7 +23,8 @@ void print_usage(const char *prog_name) {
     printf("  gcp       Google Cloud Platform operations (whoami, spot-watch, tunnel, run-with-secrets)\n");
     printf("  task      Task management (submit, list, kill, logs, clean)\n");
     printf("  worker    Manage the background task scheduler daemon (start, stop, status)\n\n");
-    printf("PBS-Style Aliases:\n");
+    printf("Aliases:\n");
+    printf("  mem       Alias for 'mops sys mem'\n");
     printf("  qsub      Alias for 'mops task submit'\n");
     printf("  qstat     Alias for 'mops task list'\n");
     printf("  qdel      Alias for 'mops task kill'\n");
@@ -70,7 +71,10 @@ int main(int argc, char **argv) {
         return cmd_task(argc - 1, argv + 1);
     } else if (strcmp(cmd, "worker") == 0) {
         return cmd_worker(argc - 1, argv + 1);
-    } 
+    } else if (strcmp(cmd, "mem") == 0) {
+        char *new_argv[] = { "sys", "mem" };
+        return cmd_sys(2, new_argv);
+    }
     /* PBS-style aliases */
     else if (strcmp(cmd, "qsub") == 0 || strcmp(cmd, "qdel") == 0) {
         // Reconstruct argv to pass to the task command dispatcher.

@@ -109,6 +109,72 @@ int cmd_sys_cpu(int argc, char **argv) {
 }
 
 /*
+ * System Metrics - Memory
+ */
+
+int cmd_sys_mem(int argc, char **argv) {
+    int human_readable = 0;
+    int json = 0;
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0) human_readable = 1;
+        if (strcmp(argv[i], "--json") == 0) json = 1;
+    }
+    
+    FILE *fp = fopen("/proc/meminfo", "r");
+    if (!fp) {
+        if (json) printf("{\"error\":\"Could not open /proc/meminfo\"}\n");
+        else fprintf(stderr, "Error: Could not open /proc/meminfo. Are you on Linux?\n");
+        return 1;
+    }
+
+    unsigned long long mem_total = 0, mem_free = 0, mem_available = 0;
+    unsigned long long swap_total = 0, swap_free = 0;
+    char line[256];
+    
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "MemTotal:", 9) == 0) sscanf(line, "MemTotal: %llu kB", &mem_total);
+        else if (strncmp(line, "MemFree:", 8) == 0) sscanf(line, "MemFree: %llu kB", &mem_free);
+        else if (strncmp(line, "MemAvailable:", 13) == 0) sscanf(line, "MemAvailable: %llu kB", &mem_available);
+        else if (strncmp(line, "SwapTotal:", 10) == 0) sscanf(line, "SwapTotal: %llu kB", &swap_total);
+        else if (strncmp(line, "SwapFree:", 9) == 0) sscanf(line, "SwapFree: %llu kB", &swap_free);
+    }
+    fclose(fp);
+
+    unsigned long long mem_used = 0;
+    if (mem_available > 0) {
+        mem_used = mem_total - mem_available; // Best estimate of actual used memory
+    } else {
+        mem_used = mem_total - mem_free; // Fallback for older kernels
+    }
+    unsigned long long swap_used = swap_total - swap_free;
+
+    if (json) {
+        printf("{\"mem_total_kb\":%llu,\"mem_free_kb\":%llu,\"mem_available_kb\":%llu,\"mem_used_kb\":%llu,\"swap_total_kb\":%llu,\"swap_free_kb\":%llu,\"swap_used_kb\":%llu}\n",
+               mem_total, mem_free, mem_available, mem_used, swap_total, swap_free, swap_used);
+    } else if (human_readable) {
+        printf("System Memory:\n");
+        printf("----------------------------------------------------\n");
+        printf("Total Memory:      %8.2f MB\n", (double)mem_total / 1024.0);
+        printf("Used Memory:       %8.2f MB\n", (double)mem_used / 1024.0);
+        printf("Free Memory:       %8.2f MB\n", (double)mem_free / 1024.0);
+        if (mem_available > 0) {
+            printf("Available Memory:  %8.2f MB\n", (double)mem_available / 1024.0);
+        }
+        if (swap_total > 0) {
+            printf("----------------------------------------------------\n");
+            printf("Total Swap:        %8.2f MB\n", (double)swap_total / 1024.0);
+            printf("Used Swap:         %8.2f MB\n", (double)swap_used / 1024.0);
+            printf("Free Swap:         %8.2f MB\n", (double)swap_free / 1024.0);
+        }
+    } else {
+        printf("mem_total_kb=%llu,mem_used_kb=%llu,mem_available_kb=%llu,swap_total_kb=%llu,swap_used_kb=%llu\n",
+               mem_total, mem_used, mem_available, swap_total, swap_used);
+    }
+
+    return 0;
+}
+
+/*
  * System Metrics - GPU
  */
 
@@ -485,6 +551,7 @@ int cmd_sys(int argc, char **argv) {
         printf("Usage: mops sys <command> [options]\n\n");
         printf("Commands:\n");
         printf("  cpu       Show CPU utilization\n");
+        printf("  mem       Show Memory utilization\n");
         printf("  gpu       Show GPU utilization\n");
         printf("  tpu       Show TPU availability\n");
         printf("  oom       List Out-Of-Memory killed processes from dmesg\n");
@@ -499,6 +566,8 @@ int cmd_sys(int argc, char **argv) {
 
     if (strcmp(subcmd, "cpu") == 0) {
         return cmd_sys_cpu(argc - 1, argv + 1);
+    } else if (strcmp(subcmd, "mem") == 0) {
+        return cmd_sys_mem(argc - 1, argv + 1);
     } else if (strcmp(subcmd, "gpu") == 0) {
         return cmd_sys_gpu(argc - 1, argv + 1);
     } else if (strcmp(subcmd, "tpu") == 0) {
