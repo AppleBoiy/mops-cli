@@ -76,8 +76,17 @@ int main(int argc, char **argv) {
     } else if (strcmp(cmd, "worker") == 0) {
         return cmd_worker(argc - 1, argv + 1);
     } else if (strcmp(cmd, "mem") == 0) {
-        char *new_argv[] = { "sys", "mem" };
-        return cmd_sys(2, new_argv);
+        int new_argc = argc;
+        char **new_argv = malloc(sizeof(char*) * new_argc);
+        if (!new_argv) return EXIT_FAILURE;
+        new_argv[0] = "sys";
+        new_argv[1] = "mem";
+        for (int i = 2; i < argc; i++) {
+            new_argv[i] = argv[i];
+        }
+        int ret = cmd_sys(new_argc, new_argv);
+        free(new_argv);
+        return ret;
     }
     /* PBS-style aliases */
     else if (strcmp(cmd, "qsub") == 0 || strcmp(cmd, "qdel") == 0) {
@@ -97,8 +106,17 @@ int main(int argc, char **argv) {
         free(new_argv);
         return ret;
     } else if (strcmp(cmd, "qstat") == 0) {
-        char *new_argv[] = { "task", "list" };
-        return cmd_task(2, new_argv);
+        int new_argc = argc;
+        char **new_argv = malloc(sizeof(char*) * new_argc);
+        if (!new_argv) return EXIT_FAILURE;
+        new_argv[0] = "task";
+        new_argv[1] = "list";
+        for (int i = 2; i < argc; i++) {
+            new_argv[i] = argv[i];
+        }
+        int ret = cmd_task(new_argc, new_argv);
+        free(new_argv);
+        return ret;
     }
     else if (strcmp(cmd, "-h") == 0 || strcmp(cmd, "--help") == 0) {
         print_usage(argv[0]);
