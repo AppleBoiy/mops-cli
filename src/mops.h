@@ -7,6 +7,7 @@
  * Database Operations
  */
 int db_init(void);
+void db_close(void);
 sqlite3 *db_get_connection(void);
 
 /*

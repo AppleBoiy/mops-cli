@@ -233,6 +233,11 @@ int cmd_task_bg(int argc, char **argv) {
             exit_code = WEXITSTATUS(ret);
         }
 
+        /* Reopen SQLite connection safely after fork */
+        db_close();
+        if (db_init() != 0) {
+            /* Unable to update DB; proceed to exit with code anyway */
+        }
         /* 4. Update status dynamically from the background process */
         update_task_status(task_id, exit_code == 0 ? "FINISHED" : "FAILED");
 

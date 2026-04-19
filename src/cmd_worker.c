@@ -17,6 +17,7 @@
 #define POLL_INTERVAL 5 /* seconds */
 
 static volatile int running = 1;
+static volatile pid_t current_child = -1;
 
 /*
  * Signal handler for graceful shutdown.
@@ -24,6 +25,10 @@ static volatile int running = 1;
 static void handle_sigterm(int sig) {
     (void)sig;
     running = 0;
+    /* Forward SIGTERM to the running child process group, if any */
+    if (current_child > 0) {
+        kill(-current_child, SIGTERM);
+    }
 }
 
 /*
@@ -93,21 +98,70 @@ static void run_worker_loop(void) {
                 sqlite3_step(update_stmt);
                 sqlite3_finalize(update_stmt);
 
-                int ret = system(cmd_buf);
-                int exit_code = WIFEXITED(ret) ? WEXITSTATUS(ret) : 1;
-
-                const char *final_status = (exit_code == 0) ? "FINISHED" : "FAILED";
-                sqlite3_prepare_v2(db, "UPDATE tasks SET status = ? WHERE id = ?", -1, &update_stmt, NULL);
-                sqlite3_bind_text(update_stmt, 1, final_status, -1, SQLITE_STATIC);
-                sqlite3_bind_int(update_stmt, 2, task_id);
-                sqlite3_step(update_stmt);
-                sqlite3_finalize(update_stmt);
-                
-                if (notify_url && strlen(notify_url_buf) > 0) {
-                     notify_webhook_from_worker(task_id, exit_code, notify_url_buf);
+                /* Fork and exec the task, record PID, redirect logs, and wait */
+                pid_t cpid = fork();
+                if (cpid < 0) {
+                    /* Fork failed: mark task as FAILED */
+                    sqlite3_prepare_v2(db, "UPDATE tasks SET status = 'FAILED' WHERE id = ?", -1, &update_stmt, NULL);
+                    sqlite3_bind_int(update_stmt, 1, task_id);
+                    sqlite3_step(update_stmt);
+                    sqlite3_finalize(update_stmt);
+                    continue;
                 }
 
-                continue; /* Check for another job immediately */
+                if (cpid == 0) {
+                    /* Child process: new process group, redirect IO, exec via shell */
+                    setpgid(0, 0);
+
+                    char log_path[256];
+                    snprintf(log_path, sizeof(log_path), "/tmp/mops_task_%d.log", task_id);
+
+                    int fd_in = open("/dev/null", O_RDONLY);
+                    int fd_out = open(log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+
+                    if (fd_in >= 0) {
+                        dup2(fd_in, STDIN_FILENO);
+                        close(fd_in);
+                    }
+                    if (fd_out >= 0) {
+                        dup2(fd_out, STDOUT_FILENO);
+                        dup2(fd_out, STDERR_FILENO);
+                        close(fd_out);
+                    }
+
+                    execl("/bin/sh", "sh", "-lc", cmd_buf, (char*)NULL);
+                    _exit(127); /* exec failed */
+                } else {
+                    /* Parent (worker): record PID, wait, update status */
+                    current_child = cpid;
+
+                    sqlite3_prepare_v2(db, "UPDATE tasks SET pid = ? WHERE id = ?", -1, &update_stmt, NULL);
+                    sqlite3_bind_int(update_stmt, 1, (int)cpid);
+                    sqlite3_bind_int(update_stmt, 2, task_id);
+                    sqlite3_step(update_stmt);
+                    sqlite3_finalize(update_stmt);
+
+                    int wstatus = 0;
+                    if (waitpid(cpid, &wstatus, 0) < 0) {
+                        wstatus = 1;
+                    }
+                    current_child = -1;
+
+                    int exit_code = (WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1);
+                    const char *final_status = (exit_code == 0) ? "FINISHED" : "FAILED";
+
+                    sqlite3_prepare_v2(db, "UPDATE tasks SET status = ? WHERE id = ?", -1, &update_stmt, NULL);
+                    sqlite3_bind_text(update_stmt, 1, final_status, -1, SQLITE_STATIC);
+                    sqlite3_bind_int(update_stmt, 2, task_id);
+                    sqlite3_step(update_stmt);
+                    sqlite3_finalize(update_stmt);
+
+                    if (strlen(notify_url_buf) > 0) {
+                        notify_webhook_from_worker(task_id, exit_code, notify_url_buf);
+                    }
+
+                    continue; /* Check for another job immediately */
+                }
             } else {
                  sqlite3_finalize(stmt);
             }
