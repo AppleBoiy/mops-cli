@@ -172,3 +172,45 @@ The `mops` scheduler uses the following files:
 -   `mops.db`: An SQLite database file created in the directory where you run `mops`. It stores the state of all jobs.
 -   `/tmp/mops_worker.pid`: A file containing the Process ID of the running worker daemon.
 -   `/tmp/mops_task_<id>.log`: The file where `stdout` and `stderr` for each executed job are redirected.
+
+---
+
+## Running the Test Suite
+
+The project includes a pytest-based integration test suite that exercises end-to-end flows (exec, bg, qsub/worker, kill, logs, rm, purge, list filters).
+
+Prerequisites:
+- Linux recommended (some sys/clean features rely on /proc; tests skip worker-based flows if a worker is already running)
+- Python 3.8+
+- make, gcc/clang
+- curl (for webhook tests if enabled)
+
+Setup:
+```bash
+# Optional: create and activate a virtual environment
+python3 -m venv .venv
+. .venv/bin/activate
+
+# Install test dependencies
+pip install pytest
+```
+
+Build the binary:
+```bash
+make clean && make -j4
+```
+
+Run all tests:
+```bash
+pytest -q tests
+```
+
+Run a single test:
+```bash
+pytest -q tests/test_task_flow.py::test_worker_qsub_end_to_end
+```
+
+Notes:
+- Tests use an isolated SQLite DB per test via MOPS_DB_PATH, so they won’t touch your existing mops.db.
+- Worker tests will skip if a system worker is already running to avoid interfering with an external daemon.
+- You can still run CLI commands manually while using the same DB by exporting MOPS_DB_PATH to the same path the tests use.
