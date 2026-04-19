@@ -67,7 +67,7 @@ static void find_process_by_inode(unsigned long target_inode) {
         while ((fd_ent = readdir(fd_dir)) != NULL) {
             if (fd_ent->d_name[0] == '.') continue;
 
-            char link_path[512];
+            char link_path[1024];
             snprintf(link_path, sizeof(link_path), "%s/%s", fd_path, fd_ent->d_name);
 
             char link_dest[256];
