@@ -177,8 +177,9 @@ run_test "./mops task queue --exec" 0
 # List Subcommand
 run_test "./mops task list" 0
 
-# Logs Subcommand (Assuming task 1 was our sync test, logs should exist)
-run_test "./mops task logs 1" 0
+# Logs Subcommand (Task 3 is our bg test, which creates a log file)
+sleep 0.5 # Give the bg task a moment to initialize the log file
+run_test "./mops task logs 3" 0
 run_test "./mops task logs 9999" 1 # Log file won't exist
 
 # Clean Subcommand
@@ -188,9 +189,9 @@ run_test_env_dependent "./mops task clean --force"
 # Kill Subcommand
 # Spawn a long-running task to guarantee it's alive to kill
 run_test "./mops task bg 'sleep 100'" 0
-# Retrieve the ID of the last task (should be 5 based on our previous runs)
-# Let's just indiscriminately try killing recent tasks (5 is our sleep 100 task)
-run_test "./mops task kill 5" 0
+# Retrieve the ID of the last task (should be 6 based on our previous runs)
+# Let's just indiscriminately try killing recent tasks (6 is our sleep 100 task)
+run_test "./mops task kill 6" 0
 
 # Invalid task operations
 run_test "./mops task kill invalid" 1
