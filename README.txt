@@ -31,6 +31,19 @@ Generate a `.deb` package and install it system-wide.
     mops --help
     man mops
 
+Testing
+-------
+The test suite is written in Python using `pytest` to thoroughly validate the CLI and the background worker daemon.
+
+    # 1. Install test dependencies (in a virtual environment)
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -e .
+
+    # 2. Run the tests
+    make -j
+    pytest tests/
+
 
 Author
 ------
