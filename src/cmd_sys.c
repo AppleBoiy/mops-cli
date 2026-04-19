@@ -6,7 +6,9 @@
 #include <dirent.h>
 #include "mops.h"
 
-/* --- System Metrics - CPU --- */
+/*
+ * System Metrics - CPU
+ */
 
 struct cpu_stat {
     unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
@@ -20,7 +22,10 @@ static int read_cpu_stat(struct cpu_stat *st) {
     
     char buffer[256];
     if (fgets(buffer, sizeof(buffer), fp)) {
-        /* /proc/stat CPU line format: cpu user nice system idle iowait irq softirq steal guest guest_nice */
+        /*
+         * /proc/stat CPU line format: cpu user nice system idle
+         * iowait irq softirq steal guest guest_nice
+         */
         sscanf(buffer, "cpu %llu %llu %llu %llu %llu %llu %llu %llu",
                &st->user, &st->nice, &st->system, &st->idle,
                &st->iowait, &st->irq, &st->softirq, &st->steal);
@@ -39,8 +44,12 @@ static unsigned long long get_total_time(struct cpu_stat *st) {
 }
 
 int cmd_sys_cpu(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    int human_readable = 0;
+    int long_format = 0;
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0) human_readable = 1;
+        if (strcmp(argv[i], "-l") == 0) long_format = 1;
+    }
     
     struct cpu_stat stat1, stat2;
     
@@ -70,18 +79,44 @@ int cmd_sys_cpu(int argc, char **argv) {
         usage = (double)(total_diff - idle_diff) / total_diff * 100.0;
     }
 
-    printf("CPU Utilization: %.2f%%\n", usage);
+    if (long_format) {
+        if (human_readable) {
+            printf("CPU User: %llu\n", stat2.user);
+            printf("CPU System: %llu\n", stat2.system);
+            printf("CPU Idle: %llu\n", stat2.idle);
+            printf("CPU IOWait: %llu\n", stat2.iowait);
+        } else {
+            printf("user=%llu,system=%llu,idle=%llu,iowait=%llu\n", stat2.user, stat2.system, stat2.idle, stat2.iowait);
+        }
+    }
+
+    if (human_readable) {
+        printf("CPU Utilization: %.2f%%\n", usage);
+    } else {
+        printf("%.2f\n", usage);
+    }
     return 0;
 }
 
-/* --- System Metrics - GPU --- */
+/*
+ * System Metrics - GPU
+ */
 
 int cmd_sys_gpu(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    int human_readable = 0;
+    int long_format = 0;
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0) human_readable = 1;
+        if (strcmp(argv[i], "-l") == 0) long_format = 1;
+    }
     
-    /* Execute nvidia-smi. We ask for CSV format to avoid messy parsing. */
-    const char *cmd = "nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null";
+    /*
+     * Execute nvidia-smi. We ask for CSV format to avoid
+     * messy parsing.
+     */
+    const char *cmd = long_format ?
+        "nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw --format=csv,noheader 2>/dev/null" :
+        "nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null";
     FILE *fp = popen(cmd, "r");
     
     if (!fp) {
@@ -94,27 +129,50 @@ int cmd_sys_gpu(int argc, char **argv) {
     
     while (fgets(line, sizeof(line), fp)) {
         if (!gpu_found) {
-            printf("NVIDIA GPUs Found:\n");
-            printf("%-5s | %-20s | %-20s | %-10s\n", "IDX", "Name", "Memory (Used/Total)", "Util (%)");
-            printf("----------------------------------------------------------------------\n");
+            if (human_readable) {
+                printf("NVIDIA GPUs Found:\n");
+                if (long_format) {
+                    printf("%-5s | %-20s | %-20s | %-10s | %-10s | %-10s\n", "IDX", "Name", "Memory (Used/Total)", "Util (%)", "Temp", "Power");
+                    printf("------------------------------------------------------------------------------------------------\n");
+                } else {
+                    printf("%-5s | %-20s | %-20s | %-10s\n", "IDX", "Name", "Memory (Used/Total)", "Util (%)");
+                    printf("----------------------------------------------------------------------\n");
+                }
+            }
             gpu_found = 1;
         }
         
-        line[strcspn(line, "\n")] = 0; // Strip newline
+        line[strcspn(line, "\n")] = 0; /* Strip newline */
         
-        // Simple manual split based on commas to format output nicely
+        /*
+         * Simple manual split based on commas to format output nicely.
+         */
         char *idx = strtok(line, ",");
         char *name = strtok(NULL, ",");
         char *mem_used = strtok(NULL, ",");
         char *mem_total = strtok(NULL, ",");
         char *util = strtok(NULL, ",");
+        char *temp = long_format ? strtok(NULL, ",") : NULL;
+        char *power = long_format ? strtok(NULL, ",") : NULL;
 
         if (idx && name && mem_used && mem_total && util) {
-            char mem_str[64];
-            snprintf(mem_str, sizeof(mem_str), "%s / %s", mem_used, mem_total);
-            printf("%-5s | %-20s | %-20s | %-10s\n", idx, name, mem_str, util);
+            if (human_readable) {
+                char mem_str[64];
+                snprintf(mem_str, sizeof(mem_str), "%s / %s", mem_used, mem_total);
+                if (long_format && temp && power) {
+                    printf("%-5s | %-20s | %-20s | %-10s | %-10s | %-10s\n", idx, name, mem_str, util, temp, power);
+                } else {
+                    printf("%-5s | %-20s | %-20s | %-10s\n", idx, name, mem_str, util);
+                }
+            } else {
+                if (long_format && temp && power) {
+                    printf("%s,%s,%s,%s,%s,%s,%s\n", idx, name, mem_used, mem_total, util, temp, power);
+                } else {
+                    printf("%s,%s,%s,%s,%s\n", idx, name, mem_used, mem_total, util);
+                }
+            }
         } else {
-            // Fallback if formatting is unexpected
+            /* Fallback if formatting is unexpected */
             printf("%s\n", line);
         }
     }
@@ -122,17 +180,25 @@ int cmd_sys_gpu(int argc, char **argv) {
     int status = pclose(fp);
 
     if (!gpu_found || status != 0) {
-        printf("No NVIDIA GPU found, or nvidia-smi is not in PATH.\n");
+        if (human_readable) {
+            printf("No NVIDIA GPU found, or nvidia-smi is not in PATH.\n");
+        }
     }
     
     return 0;
 }
 
-/* --- System Metrics - TPU --- */
+/*
+ * System Metrics - TPU
+ */
 
 int cmd_sys_tpu(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    int human_readable = 0;
+    int long_format = 0;
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0) human_readable = 1;
+        if (strcmp(argv[i], "-l") == 0) long_format = 1;
+    }
     
     DIR *dir = opendir("/dev");
     if (!dir) {
@@ -143,27 +209,48 @@ int cmd_sys_tpu(int argc, char **argv) {
     struct dirent *ent;
     int tpu_count = 0;
     
-    printf("Scanning for TPU devices...\n");
+    if (human_readable) {
+        printf("Scanning for TPU devices...\n");
+    }
     
     while ((ent = readdir(dir)) != NULL) {
-        /* Standard Google Cloud TPU device names are typically /dev/accelX */
+        /*
+         * Standard Google Cloud TPU device names are typically
+         * /dev/accelX
+         */
         if (strncmp(ent->d_name, "accel", 5) == 0) {
-            printf("- Found TPU device: /dev/%s\n", ent->d_name);
+            if (human_readable) {
+                printf("- Found TPU device: /dev/%s\n", ent->d_name);
+            } else if (long_format) {
+                printf("/dev/%s\n", ent->d_name);
+            }
             tpu_count++;
         }
     }
     closedir(dir);
     
-    if (tpu_count == 0) {
-        printf("No TPU devices found (checked /dev/accel*).\n");
+    if (human_readable) {
+        if (tpu_count == 0) {
+            printf("No TPU devices found (checked /dev/accel*).\n");
+        } else {
+            if (long_format) {
+                printf("Total TPUs found: %d (Paths listed above)\n", tpu_count);
+            } else {
+                printf("Total TPUs found: %d\n", tpu_count);
+            }
+        }
     } else {
-        printf("Total TPUs found: %d\n", tpu_count);
+        if (!long_format) {
+            printf("%d\n", tpu_count);
+        }
     }
     
     return 0;
 }
 
-/* --- Main Dispatcher --- */
+/*
+ * Main Dispatcher
+ */
 
 int cmd_sys(int argc, char **argv) {
     if (argc < 2) {
