@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "mops.h"
+#include "argtable3.h"
+
+#ifndef VERSION
+#define VERSION "1.1.2-dev"
+#endif
 
 /*
  * Forward declarations for module entry points

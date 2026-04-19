@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS = -Wall -Wextra -std=c11 -O2 -g -D_XOPEN_SOURCE=700 -MMD -MP -DVERSION=\"$(VERSION)\" -I$(SRC_DIR) -Ilib
+CFLAGS = -Wall -Wextra -std=c11 -O2 -g -D_XOPEN_SOURCE=700 -MMD -MP -DVERSION=\"$(VERSION)\" -I$(SRC_DIR)
 LDFLAGS ?= 
 LDLIBS = -lsqlite3 -ldl -lncurses
 
@@ -7,11 +7,10 @@ VERSION ?= 1.1.2
 
 TARGET = mops
 SRC_DIR = src
-LIB_DIR = lib
 OBJ_DIR = obj
 
-SRCS = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(LIB_DIR)/*.c)
-OBJS = $(addprefix $(OBJ_DIR)/, $(notdir $(SRCS:.c=.o)))
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 DEPS = $(OBJS:.o=.d)
 
 PREFIX ?= /usr/local
@@ -39,9 +38,7 @@ directories:
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-vpath %.c $(SRC_DIR) $(LIB_DIR)
-
-$(OBJ_DIR)/%.o: %.c | directories
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | directories
 	$(CC) $(CFLAGS) -c $< -o $@
 
 -include $(DEPS)
@@ -94,10 +91,10 @@ test: all
 	fi
 
 lint:
-	cppcheck --enable=all --suppress=missingIncludeSystem -I$(SRC_DIR) -I$(LIB_DIR) $(SRC_DIR)/*.c
+	cppcheck --enable=all --suppress=missingIncludeSystem -i $(SRC_DIR)/argtable3.c -I$(SRC_DIR) $(SRC_DIR)/*.c
 
 format:
-	clang-format -i $(SRC_DIR)/*.c
+	clang-format -i $(filter-out $(SRC_DIR)/argtable3.c, $(wildcard $(SRC_DIR)/*.c))
 
 help:
 	@echo "Mops CLI Build System"
