@@ -11,6 +11,7 @@ OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 
 PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
+MANDIR = $(PREFIX)/share/man/man1
 
 .PHONY: all clean install directories dev
 
@@ -34,3 +35,5 @@ clean:
 install: all
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)
+	install -d $(DESTDIR)$(MANDIR)
+	install -m 644 man/mops.1 $(DESTDIR)$(MANDIR)

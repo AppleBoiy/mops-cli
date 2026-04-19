@@ -1,0 +1,114 @@
+.TH MOPS 1 "April 2026" "1.0" "User Commands"
+.SH NAME
+mops \- Multipurpose Operations CLI for DevOps and MLOps
+.SH SYNOPSIS
+.B mops
+\fI<command>\fR [\fI<subcommand>\fR] [\fIoptions\fR]
+.SH DESCRIPTION
+.B mops
+is a centralized utility designed for Linux system monitoring, hardware metrics, containerized environment tracking, and background task management. It bridges the gap between hardware monitoring and heavy compute workloads, making it an ideal fast-triage tool for MLOps and infrastructure engineers.
+.SH COMMAND MODULES
+.B mops
+is divided into several subcommands. Use \fBmops <command> \-\-help\fR for module-specific documentation.
+.SS disk \- Disk Operations
+Manages and visualizes disk IO, usage, and mount points.
+.TP
+.B status
+Show disk read/write statistics from /proc/diskstats.
+.TP
+.B usage
+Show total, used, and free space on the root filesystem using statvfs.
+.TP
+.B mounts
+Display currently mounted drives parsed from /proc/mounts.
+.PP
+\fBOptions for disk:\fR
+.br
+  \fB\-h\fR        Human-readable output (MB instead of raw sectors)
+.br
+  \fB\-l\fR        Long format (include extra information columns)
+
+.SS sys \- System & Hardware Metrics
+Monitors CPU, GPU, TPU, and container limits.
+.TP
+.B cpu
+Show CPU utilization parsed from /proc/stat.
+.TP
+.B gpu
+Show GPU utilization. Interfaces with nvidia-smi for VRAM, power, and temperature.
+.TP
+.B tpu
+Show TPU availability by scanning /dev/accel*.
+.TP
+.B oom
+List Out-Of-Memory killed processes from the kernel dmesg ring buffer.
+.TP
+.B cgroup
+Show Cgroup / Docker container resource limits and actual memory usage.
+.PP
+\fBOptions for sys:\fR
+.br
+  \fB\-h\fR        Human-readable output
+.br
+  \fB\-l\fR        Long format (include extra information columns)
+.br
+  \fB\-\-pids\fR    Map active processes to GPU allocations (for the 'gpu' command)
+
+.SS net \- Network Operations
+.TP
+.B port \fI<number>\fR
+Finds the exact process ID (PID) and command line associated with a local TCP port by cross-referencing /proc/net/tcp and /proc/[pid]/fd socket inodes.
+
+.SS task \- Task Management
+Tracks and manages asynchronous or queued tasks using a local SQLite database. (Note: Only available when compiled with DEV_MODE).
+.TP
+.B exec \fI"<cmd>"\fR [\fB\-\-notify\fR \fI<url>\fR]
+Execute a command synchronously.
+.TP
+.B bg \fI"<cmd>"\fR [\fB\-\-notify\fR \fI<url>\fR]
+Start a background task, daemonize it (setsid), redirect output, and track its PID.
+.TP
+.B queue \fI"<cmd>"\fR | \fB\-\-exec\fR
+Add a command to the queue, or use \-\-exec to consume and execute all queued tasks sequentially.
+.TP
+.B list
+List all tracked tasks and their status. Automatically checks the OS process table to verify if running tasks are still alive.
+.TP
+.B logs \fI<id>\fR [\fB\-\-tail\fR]
+Read or tail stdout/stderr for a tracked background task.
+.TP
+.B clean [\fB\-\-force\fR]
+Sweep zombie processes and orphaned workers from the process tree. Use \-\-force to aggressively send SIGKILL to orphaned python/worker nodes attached to init.
+.TP
+.B kill \fI<id>\fR
+Send SIGTERM to a running task.
+
+.SH FILES
+.TP
+.B mops.db
+SQLite database file created in the current working directory to track background task states.
+.TP
+.B /tmp/mops_task_<id>.log
+Standard output and standard error log files for daemonized background tasks.
+
+.SH EXAMPLES
+.TP
+Check actual memory usage and limits inside a Docker container:
+.B mops sys cgroup
+.TP
+Find out which exact process is hogging port 8080:
+.B mops net port 8080
+.TP
+See exactly which background scripts are eating GPU VRAM:
+.B mops sys gpu \-h \-\-pids
+.TP
+Start a long-running batch job and tail its logs:
+.B mops task bg "python train.py"
+.br
+.B mops task logs 1 \-\-tail
+.TP
+Clean up orphaned multiprocessing workers that failed to exit gracefully:
+.B mops task clean \-\-force
+
+.SH AUTHOR
+Created for MLOps and Infrastructure Engineers.
