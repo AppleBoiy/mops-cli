@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     else if (strcmp(cmd, "qsub") == 0 || strcmp(cmd, "qdel") == 0) {
         // Reconstruct argv to pass to the task command dispatcher.
         // e.g., "mops qsub <args>" becomes "mops task submit <args>"
-        int new_argc = argc; // We pass one less arg, but add one back
+        int new_argc = argc;
         char **new_argv = malloc(sizeof(char*) * new_argc);
         if (!new_argv) return EXIT_FAILURE;
         
@@ -85,12 +85,12 @@ int main(int argc, char **argv) {
             new_argv[i] = argv[i];
         }
         
-        int ret = cmd_task(new_argc - 1, new_argv + 1);
+        int ret = cmd_task(new_argc, new_argv);
         free(new_argv);
         return ret;
     } else if (strcmp(cmd, "qstat") == 0) {
         char *new_argv[] = { "task", "list" };
-        return cmd_task(2, new_argv + 1);
+        return cmd_task(2, new_argv);
     }
     else if (strcmp(cmd, "-h") == 0 || strcmp(cmd, "--help") == 0) {
         print_usage(argv[0]);
